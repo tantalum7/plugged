@@ -56,10 +56,13 @@ class GenericDevice:
     def udn(self):
         return self._udn
 
-    def get_device_info(self):
+    @property
+    def actions(self):
+        if not self._actions:
+            self.get_actions()
+        return self._actions
 
-        # Init list
-        action_list = set()
+    def get_device_info(self):
 
         # Request device info
         infoXML, infoDict = self._soap_request(self.location)
@@ -71,6 +74,14 @@ class GenericDevice:
         self._model_number = infoDict["root"]["device"].get("modelNumber")
         self._serial_number = infoDict["root"]["device"].get("serialNumber")
         self._udn = infoDict["root"]["device"].get("UDN")
+
+    def get_actions(self):
+
+        # Init list
+        action_list = set()
+
+        # Request device info
+        infoXML, infoDict = self._soap_request(self.location)
 
         # Find all the serviceLists throughout the xml doc (in different hierarchy levels)
         for service in infoXML.findall(".//*{urn:schemas-upnp-org:device-1-0}serviceList/"):
