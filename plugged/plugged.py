@@ -55,7 +55,7 @@ class Plugged:
         return list(devices)
 
     @classmethod
-    def get_router(cls):
+    def get_router(cls) -> Device:
 
         # Discover all IGD devices
         devices = cls.discover(filter=cls.FILTER_IGD)

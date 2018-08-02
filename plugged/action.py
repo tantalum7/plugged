@@ -1,19 +1,35 @@
 
 import requests
-import xmltodict
 from xml.etree import ElementTree
 from plugged.uri import Uri
 from plugged.exceptions import *
+
 
 class Action:
 
     def __init__(self, name: str, control_uri: Uri, service_type: str, arguments: list, return_values: list):
 
-        self.name = name
-        self.control_uri = control_uri
-        self.arguments = arguments
-        self.return_values = return_values
-        self.service_type = service_type
+        self._name = name
+        self._control_uri = control_uri
+        self._arguments = arguments
+        self._return_values = return_values
+        self._service_type = service_type
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def control_uri(self) -> Uri:
+        return self._control_uri
+
+    @property
+    def arguments(self) -> [str]:
+        return self._arguments
+
+    @property
+    def return_values(self) -> [str]:
+        return self._return_values
 
     def __eq__(self, other):
         if isinstance(other, Action):
@@ -31,7 +47,7 @@ class Action:
     def invoke(self, **kwargs):
 
         # Prepare soap action string
-        soap_action = '"{service_type}#{name}"'.format(service_type=self.service_type, name=self.name)
+        soap_action = '"{service_type}#{name}"'.format(service_type=self._service_type, name=self.name)
 
         # Prepare arguments xml
         argument_xml = ""
@@ -45,7 +61,7 @@ class Action:
                   '<s:Body>'
                     '<u:{name} xmlns:u="{service_type}">{argument_xml}</u:{name}>'
                   '</s:Body>'
-                '</s:Envelope>\r\n').format(name=self.name, service_type=self.service_type, argument_xml=argument_xml)
+                '</s:Envelope>\r\n').format(name=self.name, service_type=self._service_type, argument_xml=argument_xml)
 
         # Prepare headers
         headers = {"Content-Type": 'text/xml',
@@ -60,8 +76,6 @@ class Action:
                    }
 
         resp = requests.post(url=self.control_uri.get_url(), data=body.encode(), headers=headers)
-
-
 
 
         # If request fails (doesn't return status code 200), raise an exception
@@ -84,7 +98,7 @@ class Action:
         resp_xml = ElementTree.fromstring(resp.text)
 
         # Find the ActionResponse item in the xml response
-        resp_values = resp_xml.find(('.//{{{service}}}{name}Response').format(service=self.service_type, name=self.name))
+        resp_values = resp_xml.find(('.//{{{service}}}{name}Response').format(service=self._service_type, name=self.name))
 
         # Grab return values, store in dict and return
         return {x.tag: x.text for x in resp_values}

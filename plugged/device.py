@@ -24,7 +24,7 @@ class Device:
         self._actions = {}
 
         # Grab device info
-        self.get_device_info()
+        self._get_device_info()
 
     @property
     def location(self):
@@ -61,10 +61,10 @@ class Device:
     @property
     def actions(self):
         if not self._actions:
-            self.get_actions()
+            self._get_actions()
         return self._actions
 
-    def get_device_info(self):
+    def _get_device_info(self):
 
         # Request device info
         infoXML, infoDict = self._soap_request(self.location)
@@ -77,7 +77,7 @@ class Device:
         self._serial_number = infoDict["root"]["device"].get("serialNumber")
         self._udn = infoDict["root"]["device"].get("UDN")
 
-    def get_actions(self):
+    def _get_actions(self):
 
         # Init list
         action_list = set()

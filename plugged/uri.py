@@ -33,14 +33,14 @@ class Uri:
         resource = resource if resource else self.resource
         return Uri(scheme=self.scheme, hostname=self.hostname, port=self.port, resource=resource)
 
-    def repr(self):
+    def __repr__(self):
         return "Uri({scheme}, {hostname}, {port}, {resource}".format(**self.__dict__)
 
     def __str__(self):
         return self.get_url()
 
     def __hash__(self):
-        return zlib.adler32(self.repr().encode())
+        return zlib.adler32(repr(self).encode())
 
     def __eq__(self, other):
         if isinstance(other, Uri):
