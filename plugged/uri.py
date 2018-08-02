@@ -1,6 +1,7 @@
 
 import urllib
 import urllib.parse
+import zlib
 
 
 class Uri:
@@ -37,3 +38,13 @@ class Uri:
 
     def __str__(self):
         return self.get_url()
+
+    def __hash__(self):
+        return zlib.adler32(self.repr().encode())
+
+    def __eq__(self, other):
+        if isinstance(other, Uri):
+            return other.__hash__() == self.__hash__()
+
+    def __ne__(self, other):
+        return not self.__eq__(other)

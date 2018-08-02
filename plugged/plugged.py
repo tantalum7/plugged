@@ -4,24 +4,25 @@ import socket
 import time
 import xmltodict
 from plugged.uri import Uri
-from plugged.genericdevice import GenericDevice
-from plugged.igd import InternetGatewayDevice
+from plugged.device import Device
+from plugged.exceptions import *
+
 
 class Plugged:
 
-    SSDP_BCAST = ("239.255.255.250", 1900)
+    FILTER_IGD = "urn:schemas-upnp-org:device:InternetGatewayDevice:1"
+    FILTER_ALL = "ssdp:all"
+    _SSDP_BCAST = ("239.255.255.250", 1900)
 
-    DEVICE_TYPES = {"internetgatewaydevice": InternetGatewayDevice}
-
-    def __init__(self):
-        self.locations = set()
-        self.router_location = None
-
-    def discover_igd(self):
-        self.discover(filter="urn:schemas-upnp-org:device:InternetGatewayDevice:1")
-
-    def discover(self, filter="upnp:rootdevice", wait=10):
-
+    @classmethod
+    def discover(cls, filter="ssdp:all", wait=3, repeat_count=3, ignore_dslforum_devices=True) -> [Device]:
+        """
+        Discovers UPnP devices on the LAN, using the filer provided (defaults to all devices).
+        Method sleeps for [wait] seconds to allow response to come in (blocking).
+        M-SEARCH packet is send [repeat_count] times as its not reliable comms.
+        Returns a list of plugged.Device
+        :return:
+        """
         # Prepare discover ssdp packet
         ssdp_discover = ('M-SEARCH * HTTP/1.1\r\n'
                          'HOST: 239.255.255.250:1900\r\n'
@@ -30,7 +31,7 @@ class Plugged:
                          'ST: %s\r\n\r\n' % filter)
 
         # Send discover packet 3 times (its udp so stuff gets lost), and fetch replies
-        reply_list = self._ssdp_request(ssdp_discover, self.SSDP_BCAST, wait=wait, repeat_count=3)
+        reply_list = cls._ssdp_request(ssdp_discover, cls._SSDP_BCAST, wait=wait, repeat_count=repeat_count)
 
         # Prepare device list
         devices = set()
@@ -40,52 +41,34 @@ class Plugged:
 
             # If there is a location in the dict, create a device and add it to the list
             if "location" in ssdp_packet:
-                location = Uri.parse(ssdp_packet['location'])
 
-                for device_type in self.DEVICE_TYPES.keys():
-                    if device_type in location.resource.lower():
-                        devices.add(self.DEVICE_TYPES[device_type](location))
-                devices.add(GenericDevice(location))
+                # If ignore dslform devices is enabled, and dslforum is in the location string, skip it
+                if ignore_dslforum_devices and "dslforum" in ssdp_packet['location']:
+                    continue
+
+                try:
+                    devices.add(Device(Uri.parse(ssdp_packet['location'])))
+                except BadSoapResponse:
+                    continue
 
         # Convert set back to list, and return
         return list(devices)
 
+    @classmethod
+    def get_router(cls):
 
+        # Discover all IGD devices
+        devices = cls.discover(filter=cls.FILTER_IGD)
 
+        # If we get nothing back, raise an exception
+        if len(devices) == 0:
+            raise CannotFindDevice()
 
+        # Return the first result as the router
+        return devices[0]
 
-    def _find_services(self, device_location: Uri):
-
-        # Init list
-        service_locations = []
-
-        # Fire off soap request, and store the response
-        device_soap = self._soap_request(device_location)
-
-        # Grab virtual device list
-        virtual_device_list = device_soap["root"]["device"]["deviceList"]["device"]
-
-        # Iterate through virtual devices
-        for device in virtual_device_list:
-
-            # Pull server from device
-            service = device.get("serviceList", {}).get("service", {})
-
-            # If service resource url is present, copy device_location but with this resource
-            if "SCPDURL" in service:
-                service_locations.append(device_location.copy(resource=service["SCPDURL"]))
-
-            if "deviceList" in device:
-                pass
-
-        # Iterate through service locations
-        for location in service_locations:
-
-            service_soap = self._soap_request(location)
-
-            pass
-
-    def _parse_ssdp_packet(self, packet):
+    @staticmethod
+    def _parse_ssdp_packet(packet) -> dict:
 
         # Split into a list of lines
         lines = packet.splitlines()
@@ -112,7 +95,8 @@ class Plugged:
         # Return the dict
         return data_dict
 
-    def _ssdp_request(self, packet, ip_port_tuple, wait=10, repeat_count=1, max_replies=999):
+    @classmethod
+    def _ssdp_request(cls, packet, ip_port_tuple, wait=10, repeat_count=1, max_replies=999) -> list:
 
         if isinstance(packet, str):
             packet = packet.encode()
@@ -145,7 +129,8 @@ class Plugged:
                     break
 
             #  Parse all the replies, and return as a new list
-            return [self._parse_ssdp_packet(reply) for reply in reply_list]
+            return [cls._parse_ssdp_packet(reply) for reply in reply_list]
 
-    def _soap_request(self, request_location: Uri) -> dict:
+    @staticmethod
+    def _soap_request(request_location: Uri) -> dict:
         return xmltodict.parse(requests.get(request_location.get_url()).text)
